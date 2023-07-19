@@ -69,14 +69,27 @@ var bobFavorites = {
 	'music': ['baroque', 'ukulele', 'baroque ukulele']
 };
 
+var userFavourites = {
+	'alice': aliceFavorites,
+	'bob': bobFavorites,
+	'unknown': {movies: [], foods: [], music: []}
+}
+
 app.get('/favorites', getAccessToken, requireAccessToken, function(req, res) {
 	
-	/*
-	 * Get different user information based on the information of who approved the token
-	 */
-	
-	var unknown = {user: 'Unknown', favorites: {movies: [], foods: [], music: []}};
-	res.json(unknown);
+	console.log(req.access_token)
+	var scoped_faves = userFavourites[req.access_token.user]
+	if (!__.contains(req.access_token.scope, 'movies')) {
+		scoped_faves['movies'] = []
+	}
+	if (!__.contains(req.access_token.scope, 'foods')) {
+		scoped_faves['foods'] = []
+	}
+	if (!__.contains(req.access_token.scope, 'music')) {
+		scoped_faves['music'] = []
+	}
+	var favourites =  {user: req.access_token.user, favorites: userFavourites[req.access_token.user]}
+	res.json(favourites);
 
 });
 

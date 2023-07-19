@@ -104,6 +104,7 @@ app.get("/callback", function(req, res){
 	);
 
 	console.log('Requesting access token for code %s',code);
+	console.log(tokRes.statusCode)
 	
 	if (tokRes.statusCode >= 200 && tokRes.statusCode < 300) {
 		var body = JSON.parse(tokRes.getBody());

@@ -162,6 +162,12 @@ app.post("/token", function(req, res){
 				var access_token = randomstring.generate();
 				nosql.insert({ access_token: access_token, client_id: clientId });
 
+				// store refresh token under a different key so the auth server and protected resource can differentiate
+				// necessary because the refresh token is only to be used at the auth server, 
+				// whereas the access token is only used at the resource (ideally store in a non-shared db then)
+				var refresh_token = randomstring.generate(); // do we want to store only one refresh token per client?
+				nosql.insert({refresh_token: refresh_token, client_id: clientId})  
+
 				/*
 				 * Issue a refresh token along side the access token and save it to the database
 				 */
@@ -169,7 +175,7 @@ app.post("/token", function(req, res){
 				console.log('Issuing access token %s', access_token);
 				console.log('with scope %s', code.scope);
 
-				var token_response = { access_token: access_token, token_type: 'Bearer' };
+				var token_response = { access_token: access_token, token_type: 'Bearer', refresh_token: refresh_token };
 
 				res.status(200).json(token_response);
 				console.log('Issued tokens for code %s', req.body.code);
@@ -180,7 +186,6 @@ app.post("/token", function(req, res){
 				res.status(400).json({error: 'invalid_grant'});
 				return;
 			}
-		
 		} else {
 			console.log('Unknown code, %s', req.body.code);
 			res.status(400).json({error: 'invalid_grant'});
@@ -190,7 +195,49 @@ app.post("/token", function(req, res){
 	/*
      * Respond to a refresh token request by issuing a new access token
 	 */
+	} else if (req.body.grant_type == 'refresh_token') {
 		
+		nosql.one().make(function(builder) {
+			builder.where('refresh_token', req.body.refresh_token);
+			builder.callback(function(err, token) {
+			  if (token) {
+					  console.log("We found a matching refresh token: %s", req.body.refresh_token);
+					  if (token.client_id != clientId) {
+						  nosql.remove().make(function(builder) { builder.where('refresh_token', req.body.refresh_token); }); // assume the token has been compromised
+						  res.status(400).json({error: 'invalid_grant'});
+						  return;
+					  }
+					  // if it is a refresh token, with a matching client_id then create a new access_token and send it back + a new refresh token
+					  var access_token = randomstring.generate();
+					  var new_refresh_token = randomstring.generate();
+					  
+					  // delete all access_tokens with this client_id
+					  nosql.remove().make(function(builder) {
+						// Add your condition to match the records you want to delete
+						builder.where('client_id', clientId);
+						builder.callback(function(err, count) {
+							if (err) {
+								console.error('Error deleting records:', err);
+								res.status(500).json({ error: 'An error occurred while deleting records.' });
+								return;
+							}
+							
+							console.log('Deleted', count, 'access_tokens with a client_id', clientId);
+							nosql.insert({ access_token: access_token, client_id: clientId });
+							nosql.insert({ refresh_token: new_refresh_token, client_id: clientId });
+							var token_response = { access_token: access_token, token_type: 'Bearer',  refresh_token: token.refresh_token };
+							res.status(200).json(token_response);
+							return
+						});
+					  });
+					  return;
+			  } else {
+					  console.log('No matching token was found.');
+					  res.status(400).json({error: 'invalid_grant'});
+					  return;
+			  };
+			})
+		  });
 	} else {
 		console.log('Unknown grant type %s', req.body.grant_type);
 		res.status(400).json({error: 'unsupported_grant_type'});

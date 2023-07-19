@@ -30,7 +30,7 @@ var clients = [
 	{
 		"client_id": "oauth-client-1",
 		"client_secret": "oauth-client-secret-1",
-		"redirect_uris": ["http://localhost:9000/callback"]
+		"redirect_uris": ["http://localhost:9000/callback"],
 	}
 ];
 
