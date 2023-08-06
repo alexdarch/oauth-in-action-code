@@ -95,24 +95,22 @@ app.post('/approve', function(req, res) {
 	}
 	
 	if (req.body.approve) {
+		var rscope = getScopesFromForm(req.body);
+		var client = getClient(query.client_id);
+		var cscope = client.scope ? client.scope.split(' ') : undefined;
+		if (__.difference(rscope, cscope).length > 0) {
+			var urlParsed = buildUrl(query.redirect_uri, {
+				error: 'invalid_scope'
+			});
+			res.redirect(urlParsed);
+			return;
+		}
+		// Authorization Code grant type. Used for web apps hosted on a server
 		if (query.response_type == 'code') {
 			// user approved access
-
-			var rscope = getScopesFromForm(req.body);
-			var client = getClient(query.client_id);
-			var cscope = client.scope ? client.scope.split(' ') : undefined;
-			if (__.difference(rscope, cscope).length > 0) {
-				var urlParsed = buildUrl(query.redirect_uri, {
-					error: 'invalid_scope'
-				});
-				res.redirect(urlParsed);
-				return;
-			}
-
 			var code = randomstring.generate(8);
 			
 			// save the code and request for later
-			
 			codes[code] = { request: query, scope: rscope };
 		
 			var urlParsed = buildUrl(query.redirect_uri, {
@@ -121,14 +119,26 @@ app.post('/approve', function(req, res) {
 			});
 			res.redirect(urlParsed);
 			return;
-		
-		
-		/*
-		 * Implement response_type=token here
-	 	 */
-		
-		
-		
+		// Implicit grant type. Used for authenticating pure js/web browser applications. Has much worse security than auth code
+		} else if (query.response_type == 'token') {
+			// Since in the browser, this has to use front-channel comms
+			// Therefore, all info is public and no point in using an auth code - so just return a token directly
+			// There is no way to keep a client secret either, so don't use one (implicit in the fact that we are not using an auth code)
+			// Also cant get a refresh token as brower apps are presumed short-lived, plus resource owner is assumed to be at the computer at all times to reauthenticate
+			// The protected resource does need to configure CORS for this to work
+
+			// basically a copy of the /token endpoint
+			var access_token = randomstring.generate()
+			nosql.insert({ access_token: access_token, client_id: client.client_id, scope: rscope })
+
+			var token_response ={ access_token: access_token, token_type: 'Bearer', scope: rscope.join(' ')}
+			if (query.state) {
+				token_response.state = query.state
+			}
+
+			var urlParsed = buildUrl(query.redirect_uri, {}, qs.stringify(token_response))
+			res.redirect(urlParsed)
+			return		
 		} else {
 			// we got a response type we don't understand
 			var urlParsed = buildUrl(query.redirect_uri, {
