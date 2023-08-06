@@ -210,9 +210,29 @@ app.post("/token", function(req, res){
 		}
 	
 	/*
-	 * Implement the client credentials grant type
+	 * Implement the client credentials grant type (also edit client.js)
 	 */
-	
+	} else if (req.body.grant_type == 'client_credentials') {
+		// This time it doesnt have an autho code or other temporary credential to trade for a token.
+		// Instead the client authenticates itself directly and the auth server issues an appropriate access token.
+		// we do not issue a refresh token becuase the client is assumed to be able to request a new token for itself at any time without a seperate resource owner
+		// Contrasts to implicit type since in the /token endpoint compared to /approve endpoint
+
+		// Need to check whether the incoming request can be made into a token for this client. 
+		// Copy scope checking code from /authorize, since we have skipped the /authorize and /approve steps for this flow
+		var rscope = req.body.scope ? req.body.scope.split(' ') : undefined;
+		var cscope = client.scope ? client.scope.split(' ') : undefined;
+		if (__.difference(rscope, cscope).length > 0) {
+			res.status(400).json({error: 'invalid_scope'});
+			return;
+		}
+		// Save to DB as before
+		var access_token = randomstring.generate();
+		var token_response = { access_token: access_token, token_type: 'Bearer', scope: rscope.join(' ') };
+		nosql.insert({ access_token: access_token, client_id: clientId, scope: rscope });
+		res.status(200).json(token_response);
+		return;	
+		
 	} else if (req.body.grant_type == 'refresh_token') {
 	nosql.one().make(function(builder) {
 	  builder.where('refresh_token', req.body.refresh_token);
