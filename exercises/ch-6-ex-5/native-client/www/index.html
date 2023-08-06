@@ -49,7 +49,7 @@
       // client information
       var client = {
         'client_id': 'native-client-1',
-        'client_secret': 'oauth-native-secret-1',
+        'client_secret': 'oauth-native-secret-1',   // bad to store this in the native app as every client would then have a copy - not very secure!
         'redirect_uris': ['com.oauthinaction.mynativeapp://'],
         'scope': 'foo bar'
       };
